@@ -23,7 +23,6 @@ class LeetCodePlugin : Plugin<Project> {
             packageName.convention("dev.leetcode.solutions")
             baseDir.convention(defaultBaseDir)
             client.baseUrl.convention("https://leetcode.com")
-            templateGeneration.rebuildExisting.convention(false)
         }
 
         registerTasks(project, extension)

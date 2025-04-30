@@ -11,11 +11,11 @@ class LeetCodeClientTest {
 
     @Test
     fun `test getProblemDescription with problemId 1`() {
-        val problemDescription = leetCodeClient.getProblemDetail(1, ProblemLanguage.KOTLIN)
+        val problemDescription = leetCodeClient.getProblemDetail(1) ?: throw RuntimeException("Problem not found")
 
         assertNotNull(problemDescription)
         assertEquals(1L, problemDescription.id)
         assertNotNull(problemDescription.description)
-        println(problemDescription.codeSnippet)
+        println(problemDescription)
     }
 }
