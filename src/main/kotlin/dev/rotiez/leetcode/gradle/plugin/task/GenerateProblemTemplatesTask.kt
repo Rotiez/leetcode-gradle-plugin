@@ -61,14 +61,22 @@ abstract class GenerateProblemTemplatesTask: DefaultTask() {
             val packageName = "${props.packageName}.$solutionPackageName"
             val solutionDir = File(props.baseDir, packageName.replace(".", "/"))
 
-            if (solutionDir.exists() && !props.rebuild) {
-                project.logger.lifecycle("Skipping problem ${problem.id} – directory already exists")
-                return@forEach
+            if (solutionDir.exists()) {
+                if (props.rebuild) {
+                    solutionDir.deleteRecursively()
+                    solutionDir.mkdirs()
+                    project.logger.lifecycle("Rebuilt directory for problem ${problem.id}")
+                } else {
+                    project.logger.lifecycle("Skipping problem ${problem.id} – directory already exists")
+                    return@forEach
+                }
+            } else {
+                if (solutionDir.mkdirs()) {
+                    project.logger.info("Created directory '$solutionPackageName' for problem: ${problem.id}")
+                } else {
+                    throw GradleException("Failed to create directory: ${solutionDir.absolutePath}")
+                }
             }
-
-            if (solutionDir.mkdirs()) {
-                project.logger.info("Created directory '$solutionPackageName' for problem: ${problem.id}")
-            } else throw GradleException("Failed to create directory: ${solutionDir.absolutePath}")
 
             generators.forEach {
                 it.generateFile(solutionDir, packageName, problem)
