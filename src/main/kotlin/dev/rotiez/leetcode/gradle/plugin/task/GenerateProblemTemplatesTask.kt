@@ -1,9 +1,9 @@
 package dev.rotiez.leetcode.gradle.plugin.task
 
 import dev.rotiez.leetcode.gradle.plugin.client.LeetCodeClient
-import dev.rotiez.leetcode.gradle.plugin.client.ProblemLanguage
-import dev.rotiez.leetcode.gradle.plugin.client.ProblemLanguage.KOTLIN
-import dev.rotiez.leetcode.gradle.plugin.client.ProblemLanguage.JAVA
+import dev.rotiez.leetcode.gradle.plugin.generator.FileGenerator
+import dev.rotiez.leetcode.gradle.plugin.generator.ReadmeFileGenerator
+import dev.rotiez.leetcode.gradle.plugin.generator.SolutionFileGenerator
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
@@ -17,10 +17,6 @@ import java.io.File
 
 abstract class GenerateProblemTemplatesTask: DefaultTask() {
 
-    companion object {
-        private const val README_NAME = "README.md"
-    }
-
     @get:Option(
         option = "ids",
         description = "Comma-separated list of LeetCode problem IDs"
@@ -28,8 +24,12 @@ abstract class GenerateProblemTemplatesTask: DefaultTask() {
     @get:Input
     abstract val problemIds: Property<String>
 
+    @get:Option(
+        option = "rebuild",
+        description = "Rebuild existing templates if they already exist"
+    )
     @get:Input
-    abstract val rebuildExisting: Property<Boolean>
+    abstract val rebuild: Property<Boolean>
 
     @get:Input
     abstract val packageName: Property<String>
@@ -40,59 +40,76 @@ abstract class GenerateProblemTemplatesTask: DefaultTask() {
     @get:Internal
     abstract val client:  Property<LeetCodeClient>
 
+    init {
+        rebuild.convention(false)
+    }
+
     @TaskAction
     fun generate() {
-        val problemIds = problemIds.get()
-            .split(",")
-            .mapNotNull { it.trim().toLongOrNull() }
-            .takeIf { it.isNotEmpty() }
-            ?: throw GradleException("You must specify valid problem IDs")
-
-        val packageName = packageName.get()
-        val baseDir = baseDir.get().asFile.path
+        val props = getProperties()
         val client = client.get()
-        val rebuildExisting = rebuildExisting.get()
 
-        project.logger.lifecycle("Generating templates for problems: ${problemIds.joinToString(", ")}")
+        project.logger.lifecycle("Generating templates for problems: ${props.problemIds.joinToString(", ")}")
 
-        val packagePath = packageName.replace(".", "/")
+        val generators = getGenerators()
+        val problemDetails = client.getProblemDetail(props.problemIds)
 
-        val problemLanguage = when {
-            baseDir.contains("kotlin") -> KOTLIN
-            baseDir.contains("java") -> JAVA
-            else -> throw GradleException("Could not determine the programming language based on baseDir")
-        }
-        val problemDetails = client.getProblemDetail(problemIds, problemLanguage)
-
-        project.logger.info("Fetched description for problems: ${problemIds.joinToString(", ")}")
+        project.logger.info("Fetched description for problems: ${props.problemIds.joinToString(", ")}")
 
         problemDetails.forEach { problem ->
             val solutionPackageName = "solution_${problem.id}"
-            val solutionDir = File(baseDir, "$packagePath/$solutionPackageName")
+            val packageName = "${props.packageName}.$solutionPackageName"
+            val solutionDir = File(props.baseDir, packageName.replace(".", "/"))
 
-            if (solutionDir.exists() && !rebuildExisting) {
-                project.logger.lifecycle("Skipping problem ${problem.id} – directory already exists")
-                return@forEach
+            if (solutionDir.exists()) {
+                if (props.rebuild) {
+                    solutionDir.deleteRecursively()
+                    solutionDir.mkdirs()
+                    project.logger.lifecycle("Rebuilt directory for problem ${problem.id}")
+                } else {
+                    project.logger.lifecycle("Skipping problem ${problem.id} – directory already exists")
+                    return@forEach
+                }
+            } else {
+                if (solutionDir.mkdirs()) {
+                    project.logger.info("Created directory '$solutionPackageName' for problem: ${problem.id}")
+                } else {
+                    throw GradleException("Failed to create directory: ${solutionDir.absolutePath}")
+                }
             }
 
-            if (solutionDir.mkdirs()) {
-                project.logger.info("Created directory '$solutionPackageName' for problem: ${problem.id}")
-            } else throw GradleException("Failed to create directory: ${solutionDir.absolutePath}")
-
-            val readmeFile = File(solutionDir, README_NAME)
-            readmeFile.writeText("""
-                |# Problem ${problem.id}
-                |
-                |## Details
-                |- **Difficulty**: ${problem.difficulty}
-                |
-                |## Description
-                |${problem.description}
-            """.trimMargin())
-
-            project.logger.info("Generated README.md for problem ${problem.id} in ${readmeFile.path}")
+            generators.forEach {
+                it.generateFile(solutionDir, packageName, problem)
+            }
         }
 
         project.logger.lifecycle("Problem templates successfully generated")
     }
+
+    private fun getProperties(): GenerateProblemTemplatesProperties {
+        return GenerateProblemTemplatesProperties(
+            problemIds = problemIds.get()
+                .split(",")
+                .mapNotNull { it.trim().toLongOrNull() }
+                .takeIf { it.isNotEmpty() }
+                ?: throw GradleException("You must specify valid problem IDs"),
+            packageName = packageName.get(),
+            baseDir = baseDir.get().asFile.path,
+            rebuild = rebuild.get(),
+        )
+    }
+
+    private fun getGenerators(): List<FileGenerator> {
+        return listOf(
+            ReadmeFileGenerator(),
+            SolutionFileGenerator()
+        )
+    }
+
+    data class GenerateProblemTemplatesProperties(
+        val problemIds: List<Long>,
+        val rebuild: Boolean,
+        val packageName: String,
+        val baseDir: String,
+    )
 }

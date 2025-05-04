@@ -28,7 +28,4 @@ interface LeetCodePluginExtension {
      */
     @get:Nested
     val client: LeetCodeClientExtension
-
-    @get:Nested
-    val templateGeneration: LeetCodeGenerationExtension
 }

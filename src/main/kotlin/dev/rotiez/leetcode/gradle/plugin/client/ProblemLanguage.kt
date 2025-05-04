@@ -1,6 +1,6 @@
 package dev.rotiez.leetcode.gradle.plugin.client
 
-enum class ProblemLanguage(val langName: String) {
-    JAVA("Java"),
-    KOTLIN("Kotlin"),
+enum class ProblemLanguage(val slug: String) {
+    JAVA("java"),
+    KOTLIN("kotlin"),
 }
